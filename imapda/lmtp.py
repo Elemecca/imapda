@@ -1,38 +1,29 @@
 
-import re
+from aiosmtpd.smtp import SMTP
 
-from twisted.mail.smtp import ESMTP
+class LMTP(SMTP):
+    def __init__(self, **kwargs):
+        # pass self as handler to superclass
+        super().__init__(self, **kwargs)
+
+    # LMTP 4.1 - `LHLO` must behave identically to ESMTP `EHLO`
+    async def smtp_LHLO(self, arg):
+        await super().smtp_EHLO(arg)
+
+    # LMTP 4.1 - SMTP `HELO` must not be supported
+    async def smtp_HELO(self, arg):
+        await self.push('500 this is LMTP, use LHLO instead of HELO')
+
+    # LMTP 4.1 - ESMTP `EHLO` must not be supported
+    async def smtp_EHLO(self, arg):
+        await self.push('500 this is LMTP, use LHLO instead of EHLO')
+
+    async def handle_DATA(self, server, session, envelope):
+        return '250 OK good!'
 
 
-class ESMTPEnhancedStatus(object):
-    def extensions(self):
-        ext = super(ESMTPEnhancedStatus, self).extensions(self)
-        ext['ENHANCEDSTATUSCODES'] = None
-        return ext
-
-    __codeRe = re.compile(r'')
-    def sendCode(self, code, message=''):
-        match = self.__codeRe.match(message)
-        if not match:
-            message = str(code / 100) + '.0.0  ' + message
-
-        ESMTP.sendCode(self, code, message)
-
-class LMTP(ESMTP):
-    # the LHLO command has identical semantics to EHLO
-    def do_LHLO(self, rest):
-        return ESMTP.do_EHLO(self, rest)
-
-    # an LMTP server must not accept the HELO or EHLO commands
-    def do_HELO(self, rest):
-        return self.do_UNKNOWN(self, rest)
-
-    # an LMTP server must not accept the HELO or EHLO commands
-    def do_EHLO(self, rest):
-        return self.do_UNKNOWN(self, rest)
-
-    def _messageHandled(self, resultList):
-        for (success, result) in resultList:
-            if success:
-                self.sendCode(250, 'OK')
-
+class LMTPFactory(object):
+    def __call__(self):
+        return LMTP(
+                enable_SMTPUTF8 = True,
+            )
