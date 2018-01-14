@@ -1,10 +1,13 @@
 
 from aiosmtpd.smtp import SMTP
 
+from imapda import __version__
+
 class LMTP(SMTP):
     def __init__(self, **kwargs):
         # pass self as handler to superclass
         super().__init__(self, **kwargs)
+        self.__ident__ = "IMAP Delivery Agent {}".format(__version__)
 
     # LMTP 4.1 - `LHLO` must behave identically to ESMTP `EHLO`
     async def smtp_LHLO(self, arg):

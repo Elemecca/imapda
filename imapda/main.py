@@ -8,6 +8,7 @@ import os
 import signal
 import sys
 
+from imapda import __version__
 from imapda.lmtp import LMTPFactory
 
 log = logging.getLogger('main')
@@ -40,6 +41,8 @@ def main():
         )
 
     args = cli.parse_args()
+
+    log.info('imapda %s starting', __version__)
 
 
     config_file = os.path.abspath(args.config_file)
