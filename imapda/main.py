@@ -73,7 +73,7 @@ def main():
         try:
             addr = validate_email(
                 section,
-                allow_smtputf8 = True,
+                allow_smtputf8 = False,
                 check_deliverability = False,
             )
         except EmailNotValidError as err:
