@@ -8,6 +8,8 @@ import os
 import signal
 import sys
 
+from email_validator import validate_email, EmailNotValidError
+
 from imapda import __version__
 from imapda.lmtp import LMTPFactory
 
@@ -22,23 +24,23 @@ def main():
     # set the log level for aiosmtpd to warning
     # they spam a bunch of stuff at info that should be debug
     logging.config.dictConfig({
-            'version': 1,
-            'incremental': True,
-            'loggers': {
-                'mail.log': {'level': logging.WARNING},
-            },
-        })
+        'version': 1,
+        'incremental': True,
+        'loggers': {
+            'mail.log': {'level': logging.WARNING},
+        },
+    })
 
 
     cli = argparse.ArgumentParser(
-            description = "LMTP IMAP Delivery Agent",
-        )
+        description = "LMTP IMAP Delivery Agent",
+    )
 
     cli.add_argument(
-            '-f', '--config-file',
-            default = '/etc/imapda.conf',
-            help = "load an alternative configuration file",
-        )
+        '-f', '--config-file',
+        default = '/etc/imapda.conf',
+        help = "load an alternative configuration file",
+    )
 
     args = cli.parse_args()
 
@@ -52,13 +54,39 @@ def main():
             config.read_file(reader)
     except OSError as caught:
         log.error(
-                "can't read config file %s: %s\n",
-                config_file,
-                caught.strerror
-            )
+            "can't read config file %s: %s\n",
+            config_file,
+            caught.strerror
+        )
         sys.exit(1)
 
     log.info("loaded config file %s", config_file)
+
+
+    # validate and normalize address config sections
+    addresses = []
+    addr_fail = False
+    for section in config.sections():
+        if '@' not in section:
+            continue
+
+        try:
+            addr = validate_email(
+                section,
+                allow_smtputf8 = True,
+                check_deliverability = False,
+            )
+        except EmailNotValidError as err:
+            log.error("invalid address in config: %s", section)
+            addr_fail = True
+            continue
+
+        addresses.append(addr['email'])
+
+    if addr_fail:
+        sys.exit(2)
+
+    factory = LMTPFactory(addresses=addresses)
 
 
     loop = asyncio.get_event_loop()
@@ -69,7 +97,6 @@ def main():
         loop.add_signal_handler(signal.SIGTERM, loop.stop)
 
 
-    factory = LMTPFactory()
     proto = config['server'].get('protocol', 'tcp')
 
     if 'tcp' == proto:
@@ -78,14 +105,14 @@ def main():
 
         try:
             server = loop.run_until_complete(
-                    loop.create_server(factory, host, int(port))
-                )
+                loop.create_server(factory, host, int(port))
+            )
         except Exception as caught:
             log.error(
-                    "can't bind to TCP port %s:%s: %s",
-                    host, port,
-                    getattr(caught, 'strerror', str(caught)),
-                )
+                "can't bind to TCP port %s:%s: %s",
+                host, port,
+                getattr(caught, 'strerror', str(caught)),
+            )
             sys.exit(2)
 
         log.info("listening on TCP port %s:%s", host, port)
@@ -99,14 +126,14 @@ def main():
         path = os.path.abspath(path)
         try:
             server = loop.run_until_complete(
-                    loop.create_unix_server(factory, path=path)
-                )
+                loop.create_unix_server(factory, path=path)
+            )
         except Exception as caught:
             log.error(
-                    "can't bind to UNIX socket %s: %s",
-                    path,
-                    getattr(caught, 'strerror', str(caught)),
-                )
+                "can't bind to UNIX socket %s: %s",
+                path,
+                getattr(caught, 'strerror', str(caught)),
+            )
             sys.exit(2)
 
         log.info("listening on UNIX socket %s", path)
