@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from imapda.main import Server
+from imapda import main
 
-server = Server()
-server.run()
+main.main()
